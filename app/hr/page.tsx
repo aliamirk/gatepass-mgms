@@ -8,6 +8,7 @@ import {
   printGatepass,
   GatePassCreate,
   GatePassOut,
+  getGatePassPhotoFile,
 } from "../../backend/hr";
 
 // Simple small status/toast component
@@ -68,8 +69,40 @@ function StatusHistoryModal({ history, onClose }: { history?: any[]; onClose: ()
   );
 }
 
-// Image Preview Modal
-function ImagePreviewModal({ imageId, onClose }: { imageId: string; onClose: () => void }) {
+function ImagePreviewModal({
+  imageId,
+  onClose,
+}: {
+  imageId: string;
+  onClose: () => void;
+}) {
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function fetchImage() {
+      try {
+        const blob = await getGatePassPhotoFile(imageId);
+
+        if (!isMounted) return;
+
+        const url = URL.createObjectURL(blob);
+        setImageUrl(url);
+      } catch (error) {
+        console.error("Failed to load image:", error);
+        setImageUrl(null);
+      }
+    }
+
+    fetchImage();
+
+    return () => {
+      isMounted = false;
+      if (imageUrl) URL.revokeObjectURL(imageUrl);
+    };
+  }, [imageId]);
+
   return (
     <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
       <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden animate-in zoom-in-95 duration-200">
@@ -82,15 +115,23 @@ function ImagePreviewModal({ imageId, onClose }: { imageId: string; onClose: () 
             ✕ Close
           </button>
         </div>
+
         <div className="p-6 flex items-center justify-center bg-gray-50">
-          <img
-            src={`/api/images/${imageId}`}
-            alt="Gatepass photo"
-            className="max-w-full max-h-[70vh] rounded-lg shadow-lg"
-            onError={(e) => {
-              (e.target as HTMLImageElement).src = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3Crect fill='%23f3f4f6' width='400' height='300'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' fill='%239ca3af' font-size='16'%3EImage not available%3C/text%3E%3C/svg%3E";
-            }}
-          />
+          {imageUrl ? (
+            <img
+              src={imageUrl}
+              alt="Gatepass photo"
+              className="max-w-full max-h-[70vh] rounded-lg shadow-lg"
+            />
+          ) : (
+            <div className="text-gray-500 text-center">
+              <img
+                src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='300'%3E%3Crect fill='%23f3f4f6' width='400' height='300'/%3E%3Ctext x='50%25' y='50%25' text-anchor='middle' fill='%239ca3af' font-size='16'%3EImage not available%3C/text%3E%3C/svg%3E"
+                alt="Fallback"
+                className="rounded-md"
+              />
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -194,7 +235,7 @@ function GatepassCard({ pass, onPrint }: { pass: GatePassOut; onPrint: (pass: Ga
                   onClick={() => setShowExitPhoto(true)}
                   className="px-4 py-2 rounded-lg bg-gradient-to-r from-emerald-600 to-green-600 text-white text-sm font-medium hover:shadow-lg hover:scale-105 transition-all duration-200"
                 >
-                  👁️ View Photo
+                  View
                 </button>
               ) : (
                 <p className="text-sm text-gray-500 italic">Not Available</p>
@@ -208,7 +249,7 @@ function GatepassCard({ pass, onPrint }: { pass: GatePassOut; onPrint: (pass: Ga
                   onClick={() => setShowReturnPhoto(true)}
                   className="px-4 py-2 rounded-lg bg-gradient-to-r from-emerald-600 to-green-600 text-white text-sm font-medium hover:shadow-lg hover:scale-105 transition-all duration-200"
                 >
-                  👁️ View Photo
+                  View
                 </button>
               ) : (
                 <p className="text-sm text-gray-500 italic">Not Available</p>
