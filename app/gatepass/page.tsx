@@ -16,12 +16,13 @@ async function scanExit(pass_number: string, file: File) {
     method: "POST",
     body: formData,
     cache: "no-store", // Disable caching
-    headers: {
-      "Cache-Control": "no-cache, no-store, must-revalidate",
-      "Pragma": "no-cache",
-      "Expires": "0"
-    }
   });
+  
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`HTTP ${res.status}: ${errorText}`);
+  }
+  
   return res.json();
 }
 
@@ -34,12 +35,13 @@ async function scanReturn(pass_number: string, file: File) {
     method: "POST",
     body: formData,
     cache: "no-store", // Disable caching
-    headers: {
-      "Cache-Control": "no-cache, no-store, must-revalidate",
-      "Pragma": "no-cache",
-      "Expires": "0"
-    }
   });
+  
+  if (!res.ok) {
+    const errorText = await res.text();
+    throw new Error(`HTTP ${res.status}: ${errorText}`);
+  }
+  
   return res.json();
 }
 
@@ -115,7 +117,19 @@ function GatepassContent() {
     setPasswordError("");
     setUploading(true);
 
-    if (!selectedFile || !uploadType || !gid) return;
+    if (!selectedFile || !uploadType || !gid) {
+      setMessage({ type: "error", text: "Missing required data" });
+      setUploading(false);
+      return;
+    }
+
+    console.log("Upload attempt:", {
+      gid,
+      uploadType,
+      fileName: selectedFile.name,
+      fileSize: selectedFile.size,
+      fileType: selectedFile.type
+    });
 
     try {
       let response;
@@ -125,6 +139,8 @@ function GatepassContent() {
         response = await scanReturn(gid, selectedFile);
       }
 
+      console.log("API Response:", response);
+
       if (response?.id || response?.number) {
         setMessage({ type: "success", text: `Success! Status: ${response.status}` });
       } else if (response?.detail) {
@@ -133,8 +149,9 @@ function GatepassContent() {
         setMessage({ type: "error", text: "Unknown response from server" });
       }
     } catch (err: any) {
-      console.error(err);
-      setMessage({ type: "error", text: "Upload failed. Check console for details." });
+      console.error("Upload error details:", err);
+      const errorMsg = err.message || "Upload failed";
+      setMessage({ type: "error", text: `Upload failed: ${errorMsg}` });
     } finally {
       setUploading(false);
       setSelectedFile(null);
@@ -175,9 +192,22 @@ function GatepassContent() {
     input.accept = "image/*";
     input.capture = "environment";
     input.onchange = (e: any) => {
-      if (e.target.files && e.target.files[0]) {
-        handleFileSelection(e.target.files[0], pendingType!);
+      const file = e.target.files?.[0];
+      if (file) {
+        console.log("Camera file selected:", {
+          name: file.name,
+          size: file.size,
+          type: file.type
+        });
+        handleFileSelection(file, pendingType!);
+      } else {
+        console.error("No file selected from camera");
+        setMessage({ type: "error", text: "No image selected" });
       }
+    };
+    input.onerror = (err) => {
+      console.error("Camera input error:", err);
+      setMessage({ type: "error", text: "Failed to open camera" });
     };
     input.click();
     setShowSourceModal(false);
@@ -188,9 +218,22 @@ function GatepassContent() {
     input.type = "file";
     input.accept = "image/*";
     input.onchange = (e: any) => {
-      if (e.target.files && e.target.files[0]) {
-        handleFileSelection(e.target.files[0], pendingType!);
+      const file = e.target.files?.[0];
+      if (file) {
+        console.log("Gallery file selected:", {
+          name: file.name,
+          size: file.size,
+          type: file.type
+        });
+        handleFileSelection(file, pendingType!);
+      } else {
+        console.error("No file selected from gallery");
+        setMessage({ type: "error", text: "No image selected" });
       }
+    };
+    input.onerror = (err) => {
+      console.error("Gallery input error:", err);
+      setMessage({ type: "error", text: "Failed to open gallery" });
     };
     input.click();
     setShowSourceModal(false);
@@ -381,7 +424,7 @@ function GatepassContent() {
                       onClick={() => setShowPassword(!showPassword)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 transition-colors"
                     >
-                      {showPassword ? "👁️" : "👁️‍🗨️"}
+                      {showPassword ? "Hide" : "Show"}
                     </button>
                   </div>
                   {passwordError && (
