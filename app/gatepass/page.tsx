@@ -1,10 +1,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useState, useEffect, Suspense } from "react";
-
-// Hardcoded password - change this as needed
-const CORRECT_PASSWORD = "gate2025";
+import { useState, useEffect } from "react";
 
 // API call functions
 async function scanExit(pass_number: string, file: File) {
@@ -15,14 +12,7 @@ async function scanExit(pass_number: string, file: File) {
   const res = await fetch("https://gatepass-api.cushtello.shop/gate/scan-exit", {
     method: "POST",
     body: formData,
-    cache: "no-store", // Disable caching
   });
-  
-  if (!res.ok) {
-    const errorText = await res.text();
-    throw new Error(`HTTP ${res.status}: ${errorText}`);
-  }
-  
   return res.json();
 }
 
@@ -34,14 +24,7 @@ async function scanReturn(pass_number: string, file: File) {
   const res = await fetch("https://gatepass-api.cushtello.shop/gate/scan-return", {
     method: "POST",
     body: formData,
-    cache: "no-store", // Disable caching
   });
-  
-  if (!res.ok) {
-    const errorText = await res.text();
-    throw new Error(`HTTP ${res.status}: ${errorText}`);
-  }
-  
   return res.json();
 }
 
@@ -58,8 +41,7 @@ function Message({ type, text }: { type: "error" | "success" | "info"; text: str
   return <div className={`${base} ${cls}`}>{text}</div>;  
 }
 
-// Separate component that uses useSearchParams
-function GatepassContent() {
+export default function GatepassPage() {
   const searchParams = useSearchParams();
   const queryGid = searchParams.get("gid") || "";
 
@@ -72,12 +54,6 @@ function GatepassContent() {
   const [uploading, setUploading] = useState(false);
   const [showSourceModal, setShowSourceModal] = useState(false);
   const [pendingType, setPendingType] = useState<"exit" | "return" | null>(null);
-  
-  // Password modal states
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [passwordInput, setPasswordInput] = useState("");
-  const [passwordError, setPasswordError] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     if (queryGid) setGid(queryGid);
@@ -96,40 +72,11 @@ function GatepassContent() {
     setModalOpen(true);
   };
 
-  const handleConfirmPreview = () => {
-    // Keep preview modal open and show password modal
-    setShowPasswordModal(true);
-    setPasswordInput("");
-    setPasswordError("");
-  };
+  const handleConfirm = async () => {
+    if (!selectedFile || !uploadType || !gid) return;
 
-  const handlePasswordSubmit = async () => {
-    if (passwordInput !== CORRECT_PASSWORD) {
-      setPasswordError("Incorrect password. Please try again.");
-      setPasswordInput("");
-      return;
-    }
-
-    // Password correct, close both modals and proceed with upload
-    setShowPasswordModal(false);
     setModalOpen(false);
-    setPasswordInput("");
-    setPasswordError("");
     setUploading(true);
-
-    if (!selectedFile || !uploadType || !gid) {
-      setMessage({ type: "error", text: "Missing required data" });
-      setUploading(false);
-      return;
-    }
-
-    console.log("Upload attempt:", {
-      gid,
-      uploadType,
-      fileName: selectedFile.name,
-      fileSize: selectedFile.size,
-      fileType: selectedFile.type
-    });
 
     try {
       let response;
@@ -139,8 +86,6 @@ function GatepassContent() {
         response = await scanReturn(gid, selectedFile);
       }
 
-      console.log("API Response:", response);
-
       if (response?.id || response?.number) {
         setMessage({ type: "success", text: `Success! Status: ${response.status}` });
       } else if (response?.detail) {
@@ -149,9 +94,8 @@ function GatepassContent() {
         setMessage({ type: "error", text: "Unknown response from server" });
       }
     } catch (err: any) {
-      console.error("Upload error details:", err);
-      const errorMsg = err.message || "Upload failed";
-      setMessage({ type: "error", text: `Upload failed: ${errorMsg}` });
+      console.error(err);
+      setMessage({ type: "error", text: "Upload failed. Check console for details." });
     } finally {
       setUploading(false);
       setSelectedFile(null);
@@ -160,17 +104,8 @@ function GatepassContent() {
     }
   };
 
-  const handleCancelPreview = () => {
+  const handleCancel = () => {
     setModalOpen(false);
-    setSelectedFile(null);
-    setPreviewUrl(null);
-    setUploadType(null);
-  };
-
-  const handleCancelPassword = () => {
-    setShowPasswordModal(false);
-    setPasswordInput("");
-    setPasswordError("");
     setSelectedFile(null);
     setPreviewUrl(null);
     setUploadType(null);
@@ -192,22 +127,9 @@ function GatepassContent() {
     input.accept = "image/*";
     input.capture = "environment";
     input.onchange = (e: any) => {
-      const file = e.target.files?.[0];
-      if (file) {
-        console.log("Camera file selected:", {
-          name: file.name,
-          size: file.size,
-          type: file.type
-        });
-        handleFileSelection(file, pendingType!);
-      } else {
-        console.error("No file selected from camera");
-        setMessage({ type: "error", text: "No image selected" });
+      if (e.target.files && e.target.files[0]) {
+        handleFileSelection(e.target.files[0], pendingType!);
       }
-    };
-    input.onerror = (err) => {
-      console.error("Camera input error:", err);
-      setMessage({ type: "error", text: "Failed to open camera" });
     };
     input.click();
     setShowSourceModal(false);
@@ -218,22 +140,9 @@ function GatepassContent() {
     input.type = "file";
     input.accept = "image/*";
     input.onchange = (e: any) => {
-      const file = e.target.files?.[0];
-      if (file) {
-        console.log("Gallery file selected:", {
-          name: file.name,
-          size: file.size,
-          type: file.type
-        });
-        handleFileSelection(file, pendingType!);
-      } else {
-        console.error("No file selected from gallery");
-        setMessage({ type: "error", text: "No image selected" });
+      if (e.target.files && e.target.files[0]) {
+        handleFileSelection(e.target.files[0], pendingType!);
       }
-    };
-    input.onerror = (err) => {
-      console.error("Gallery input error:", err);
-      setMessage({ type: "error", text: "Failed to open gallery" });
     };
     input.click();
     setShowSourceModal(false);
@@ -313,7 +222,6 @@ function GatepassContent() {
                     <li>• Click "Scan Exit Image" when person is leaving</li>
                     <li>• Click "Scan Return Image" when person returns</li>
                     <li>• Ensure images are clear and well-lit</li>
-                    <li>• Password required for upload confirmation</li>
                   </ul>
                 </div>
               </div>
@@ -332,17 +240,17 @@ function GatepassContent() {
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden animate-in zoom-in-95 duration-200">
             {/* Modal Header */}
-            <div className="p-4 sm:p-5 border-b-2 border-green-100 bg-gradient-to-r from-emerald-50 to-green-50">
-              <h3 className="text-lg sm:text-xl font-bold text-emerald-800">
+            <div className="p-5 border-b-2 border-green-100 bg-gradient-to-r from-emerald-50 to-green-50">
+              <h3 className="text-xl font-bold text-emerald-800">
                 {uploadType === "exit" ? "📸 Exit Image Preview" : "📷 Return Image Preview"}
               </h3>
-              <p className="text-xs sm:text-sm text-gray-600 mt-1">
+              <p className="text-sm text-gray-600 mt-1">
                 Review the image before uploading
               </p>
             </div>
 
             {/* Modal Body */}
-            <div className="p-4 sm:p-6 flex flex-col items-center justify-center bg-gray-50 max-h-[calc(90vh-200px)] overflow-auto">
+            <div className="p-6 flex flex-col items-center justify-center bg-gray-50 max-h-[calc(90vh-200px)] overflow-auto">
               <img
                 src={previewUrl}
                 alt="Preview"
@@ -359,108 +267,18 @@ function GatepassContent() {
             </div>
 
             {/* Modal Footer */}
-            <div className="p-4 sm:p-5 border-t-2 border-gray-100 bg-white flex flex-col sm:flex-row justify-end gap-2 sm:gap-3">
+            <div className="p-5 border-t-2 border-gray-100 bg-white flex justify-end gap-3">
               <button
-                onClick={handleCancelPreview}
-                className="w-full sm:w-auto px-6 py-2.5 rounded-lg border-2 border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all duration-200 font-medium order-2 sm:order-1"
+                onClick={handleCancel}
+                className="px-6 py-2.5 rounded-lg border-2 border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all duration-200 font-medium"
               >
                 ✕ Cancel
               </button>
               <button
-                onClick={handleConfirmPreview}
-                className="w-full sm:w-auto px-6 py-2.5 rounded-lg bg-gradient-to-r from-emerald-600 to-green-600 text-white font-semibold hover:shadow-lg hover:scale-105 transition-all duration-200 order-1 sm:order-2"
+                onClick={handleConfirm}
+                className="px-6 py-2.5 rounded-lg bg-gradient-to-r from-emerald-600 to-green-600 text-white font-semibold hover:shadow-lg hover:scale-105 transition-all duration-200"
               >
                 ✓ Confirm Upload
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Password Modal */}
-      {showPasswordModal && (
-        <div className="fixed inset-0 bg-black/90 flex items-center justify-center p-4 z-[60] animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full animate-in zoom-in-95 duration-200">
-            {/* Modal Header */}
-            <div className="p-5 border-b-2 border-green-100 bg-gradient-to-r from-emerald-50 to-green-50">
-              <h3 className="text-xl font-bold text-emerald-800 flex items-center gap-2">
-                🔐 Authentication Required
-              </h3>
-              <p className="text-sm text-gray-600 mt-1">
-                Enter password to confirm upload
-              </p>
-            </div>
-
-            {/* Modal Body */}
-            <div className="p-6">
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-semibold mb-2 text-gray-700">
-                    Password *
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      value={passwordInput}
-                      onChange={(e) => {
-                        setPasswordInput(e.target.value);
-                        setPasswordError("");
-                      }}
-                      onKeyPress={(e) => {
-                        if (e.key === "Enter") {
-                          handlePasswordSubmit();
-                        }
-                      }}
-                      placeholder="Enter password"
-                      className={`w-full rounded-lg border-2 px-4 py-3 pr-12 text-sm transition-all duration-200 outline-none ${
-                        passwordError
-                          ? "border-red-300 focus:border-red-400 focus:ring-2 focus:ring-red-100"
-                          : "border-gray-200 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
-                      }`}
-                      autoFocus
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 transition-colors"
-                    >
-                      {showPassword ? "Hide" : "Show"}
-                    </button>
-                  </div>
-                  {passwordError && (
-                    <p className="text-xs text-red-600 mt-2 flex items-center gap-1">
-                      <span>⚠️</span> {passwordError}
-                    </p>
-                  )}
-                </div>
-
-                <div className="p-3 rounded-lg bg-blue-50 border border-blue-200">
-                  <p className="text-xs text-blue-800 flex items-start gap-2">
-                    <span className="text-base">💡</span>
-                    <span>This password protects unauthorized uploads. Contact admin if you don't have access.</span>
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Modal Footer */}
-            <div className="p-5 border-t-2 border-gray-100 bg-white flex flex-col sm:flex-row justify-end gap-2 sm:gap-3">
-              <button
-                onClick={handleCancelPassword}
-                className="w-full sm:w-auto px-6 py-2.5 rounded-lg border-2 border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all duration-200 font-medium order-2 sm:order-1"
-              >
-                ✕ Cancel
-              </button>
-              <button
-                onClick={handlePasswordSubmit}
-                disabled={!passwordInput}
-                className={`w-full sm:w-auto px-6 py-2.5 rounded-lg font-semibold transition-all duration-200 order-1 sm:order-2 ${
-                  passwordInput
-                    ? "bg-gradient-to-r from-emerald-600 to-green-600 text-white hover:shadow-lg hover:scale-105"
-                    : "bg-gray-200 text-gray-400 cursor-not-allowed"
-                }`}
-              >
-                🔓 Submit
               </button>
             </div>
           </div>
@@ -471,7 +289,7 @@ function GatepassContent() {
       {showSourceModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full animate-in zoom-in-95 duration-200">
-            <div className="p-5 border-b-2 border-green-100 bg-gradient-to-r from-emerald-50 to-green-50">
+            <div className="p-6 border-b-2 border-green-100 bg-gradient-to-r from-emerald-50 to-green-50">
               <h3 className="text-xl font-bold text-emerald-800">Choose Image Source</h3>
               <p className="text-sm text-gray-600 mt-1">Select where to get the image from</p>
             </div>
@@ -517,21 +335,5 @@ function GatepassContent() {
         </div>
       )}
     </div>
-  );
-}
-
-// Main component with Suspense wrapper
-export default function GatepassPage() {
-  return (
-    <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 via-white to-emerald-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-4 border-emerald-200 border-t-emerald-600 mx-auto mb-4"></div>
-          <p className="text-gray-600 font-medium">Loading...</p>
-        </div>
-      </div>
-    }>
-      <GatepassContent />
-    </Suspense>
   );
 }
