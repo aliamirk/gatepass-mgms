@@ -10,6 +10,9 @@ import {
   GatePassOut,
   getGatePassPhotoFile,
 } from "../../backend/hr";
+import useAuthCheck from "@/lib/useAuthCheck";
+
+
 
 // Simple small status/toast component 
 function Message({ type, text }: { type: "error" | "success" | "info"; text: string | null }) {
@@ -138,11 +141,18 @@ function ImagePreviewModal({
   );
 }
 
-// Gatepass Card Component
-function GatepassCard({ pass, onPrint }: { pass: GatePassOut; onPrint: (pass: GatePassOut) => void }) {
+// HR Gatepass Card Component
+function HRGatepassCard({
+  pass,
+  onPrint,
+}: {
+  pass: GatePassOut;
+  onPrint: (pass: GatePassOut) => void;
+}) {
   const [showHistory, setShowHistory] = useState(false);
   const [showExitPhoto, setShowExitPhoto] = useState(false);
   const [showReturnPhoto, setShowReturnPhoto] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
 
   const formatValue = (value: any) => {
     if (value === null || value === undefined) return "Not Available";
@@ -155,119 +165,128 @@ function GatepassCard({ pass, onPrint }: { pass: GatePassOut; onPrint: (pass: Ga
   return (
     <>
       <article className="bg-gradient-to-br from-white to-green-50/30 rounded-xl shadow-md border-2 border-green-100 hover:shadow-xl transition-all duration-300 overflow-hidden">
-        {/* Header */}
-        <div className="p-5 bg-gradient-to-r from-emerald-50 to-green-50 border-b-2 border-green-100">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <div className="inline-block px-3 py-1 rounded-full bg-emerald-600 text-white text-sm font-bold mb-2">
+        {/* Compact Header */}
+        <div className="p-4 bg-gradient-to-r from-emerald-50 to-green-50 border-b border-green-100">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex-1 min-w-0">
+              <div className="inline-block px-2.5 py-0.5 rounded-full bg-emerald-600 text-white text-xs font-bold mb-1.5">
                 {pass.number}
               </div>
-              <h3 className="font-bold text-2xl text-gray-800">{pass.person_name}</h3>
+              <h3 className="font-bold text-lg text-gray-800 truncate">{pass.person_name}</h3>
+              <p className="text-xs text-gray-600 mt-1">{pass.description}</p>
             </div>
-            <span className={`px-4 py-2 rounded-full text-sm font-semibold ${
-              pass.status === "approved" ? "bg-green-100 text-green-700" :
-              pass.status === "pending" ? "bg-yellow-100 text-yellow-700" :
-              pass.status === "rejected" ? "bg-red-100 text-red-700" :
-              "bg-gray-100 text-gray-700"
-            }`}>
+            <span
+              className={`px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap ${
+                pass.status === "approved"
+                  ? "bg-green-100 text-green-700"
+                  : pass.status === "pending"
+                  ? "bg-yellow-100 text-yellow-700"
+                  : pass.status === "rejected"
+                  ? "bg-red-100 text-red-700"
+                  : "bg-gray-100 text-gray-700"
+              }`}
+            >
               {pass.status.toUpperCase()}
             </span>
           </div>
         </div>
 
-        {/* Body */}
-        <div className="p-5 space-y-4">
-          {/* Description */}
-          <div className="p-3 rounded-lg bg-white border border-green-100">
-            <div className="text-xs font-semibold text-gray-500 mb-1">DESCRIPTION</div>
-            <p className="text-sm text-gray-700 leading-relaxed">{pass.description}</p>
+        {/* Compact Body */}
+        <div className="p-4 space-y-3">
+          {/* Key Info in Compact Grid */}
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="p-2 rounded bg-white border border-green-100">
+              <div className="text-[10px] font-semibold text-gray-500 uppercase mb-0.5">Created</div>
+              <p className="text-gray-700 leading-tight">{new Date(pass.created_at).toLocaleDateString()}</p>
+            </div>
+
+            <div className="p-2 rounded bg-white border border-green-100">
+              <div className="text-[10px] font-semibold text-gray-500 uppercase mb-0.5">Returnable</div>
+              <p className="text-gray-700">{pass.is_returnable ? "✓ Yes" : "✗ No"}</p>
+            </div>
+
+            {pass.exit_time && (
+              <div className="p-2 rounded bg-white border border-green-100">
+                <div className="text-[10px] font-semibold text-gray-500 uppercase mb-0.5">Exit</div>
+                <p className="text-gray-700 leading-tight">{new Date(pass.exit_time).toLocaleString()}</p>
+              </div>
+            )}
+
+            {pass.return_time && (
+              <div className="p-2 rounded bg-white border border-green-100">
+                <div className="text-[10px] font-semibold text-gray-500 uppercase mb-0.5">Return</div>
+                <p className="text-gray-700 leading-tight">{new Date(pass.return_time).toLocaleString()}</p>
+              </div>
+            )}
           </div>
 
-          {/* Grid Info */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="p-3 rounded-lg bg-white border border-green-100">
-              <div className="text-xs font-semibold text-gray-500 mb-1">CREATED BY</div>
-              <p className="text-sm text-gray-700">{formatValue(pass.created_by)}</p>
-            </div>
-            
-            <div className="p-3 rounded-lg bg-white border border-green-100">
-              <div className="text-xs font-semibold text-gray-500 mb-1">RETURNABLE</div>
-              <p className="text-sm text-gray-700">{pass.is_returnable ? "✓ Yes" : "✗ No"}</p>
-            </div>
-
-            <div className="p-3 rounded-lg bg-white border border-green-100">
-              <div className="text-xs font-semibold text-gray-500 mb-1">CREATED AT</div>
-              <p className="text-sm text-gray-700">{formatValue(pass.created_at)}</p>
-            </div>
-
-            <div className="p-3 rounded-lg bg-white border border-green-100">
-              <div className="text-xs font-semibold text-gray-500 mb-1">APPROVED AT</div>
-              <p className="text-sm text-gray-700">{formatValue(pass.approved_at)}</p>
-            </div>
-
-            <div className="p-3 rounded-lg bg-white border border-green-100">
-              <div className="text-xs font-semibold text-gray-500 mb-1">EXIT TIME</div>
-              <p className="text-sm text-gray-700">{formatValue(pass.exit_time)}</p>
-            </div>
-
-            <div className="p-3 rounded-lg bg-white border border-green-100">
-              <div className="text-xs font-semibold text-gray-500 mb-1">RETURN TIME</div>
-              <p className="text-sm text-gray-700">{formatValue(pass.return_time)}</p>
-            </div>
-
-            <div className="p-3 rounded-lg bg-white border border-green-100">
-              <div className="text-xs font-semibold text-gray-500 mb-1">QR CODE</div>
-              <p className="text-sm text-gray-700">{formatValue(pass.qr_code_url)}</p>
-            </div>
-
-            <div className="p-3 rounded-lg bg-white border border-green-100">
-              <div className="text-xs font-semibold text-gray-500 mb-1">GATEPASS ID</div>
-              <p className="text-sm text-gray-700 font-mono break-all">{pass.id}</p>
-            </div>
-          </div>
-
-          {/* Photo Section */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="p-3 rounded-lg bg-white border border-green-100">
-              <div className="text-xs font-semibold text-gray-500 mb-2">EXIT PHOTO</div>
-              {pass.exit_photo_id ? (
+          {/* Photos - Compact Row */}
+          {(pass.exit_photo_id || pass.return_photo_id) && (
+            <div className="flex gap-2">
+              {pass.exit_photo_id && (
                 <button
                   onClick={() => setShowExitPhoto(true)}
-                  className="px-4 py-2 rounded-lg bg-gradient-to-r from-emerald-600 to-green-600 text-white text-sm font-medium hover:shadow-lg hover:scale-105 transition-all duration-200"
+                  className="flex-1 px-3 py-2 rounded-lg bg-gradient-to-r from-emerald-600 to-green-600 text-white text-xs font-medium hover:shadow-lg hover:scale-105 transition-all duration-200"
                 >
-                  View
+                  Exit Photo
                 </button>
-              ) : (
-                <p className="text-sm text-gray-500 italic">Not Available</p>
               )}
-            </div>
-
-            <div className="p-3 rounded-lg bg-white border border-green-100">
-              <div className="text-xs font-semibold text-gray-500 mb-2">RETURN PHOTO</div>
-              {pass.return_photo_id ? (
+              {pass.return_photo_id && (
                 <button
                   onClick={() => setShowReturnPhoto(true)}
-                  className="px-4 py-2 rounded-lg bg-gradient-to-r from-emerald-600 to-green-600 text-white text-sm font-medium hover:shadow-lg hover:scale-105 transition-all duration-200"
+                  className="flex-1 px-3 py-2 rounded-lg bg-gradient-to-r from-green-600 to-emerald-600 text-white text-xs font-medium hover:shadow-lg hover:scale-105 transition-all duration-200"
                 >
-                  View
+                  Return Photo
                 </button>
-              ) : (
-                <p className="text-sm text-gray-500 italic">Not Available</p>
               )}
             </div>
-          </div>
+          )}
 
-          {/* Action Buttons */}
-          <div className="flex flex-wrap gap-3 pt-2">
+          {/* Collapsible Details */}
+          <button
+            onClick={() => setShowDetails(!showDetails)}
+            className="w-full px-3 py-2 rounded-lg bg-gray-50 border border-gray-200 text-xs font-medium text-gray-700 hover:bg-gray-100 transition-all duration-200 flex items-center justify-center gap-1"
+          >
+            {showDetails ? "▲ Hide Details" : "▼ Show Details"}
+          </button>
+
+          {showDetails && (
+            <div className="space-y-2 animate-in slide-in-from-top-2 duration-300">
+              <div className="grid grid-cols-1 gap-2 text-xs">
+                <div className="p-2 rounded bg-white border border-green-100">
+                  <div className="text-[10px] font-semibold text-gray-500 uppercase mb-0.5">Created By</div>
+                  <p className="text-gray-700">{formatValue(pass.created_by)}</p>
+                </div>
+
+                <div className="p-2 rounded bg-white border border-green-100">
+                  <div className="text-[10px] font-semibold text-gray-500 uppercase mb-0.5">Approved At</div>
+                  <p className="text-gray-700">{formatValue(pass.approved_at)}</p>
+                </div>
+
+                <div className="p-2 rounded bg-white border border-green-100">
+                  <div className="text-[10px] font-semibold text-gray-500 uppercase mb-0.5">QR Code</div>
+                  <p className="text-gray-700">{formatValue(pass.qr_code_url)}</p>
+                </div>
+
+                <div className="p-2 rounded bg-white border border-green-100">
+                  <div className="text-[10px] font-semibold text-gray-500 uppercase mb-0.5">Gatepass ID</div>
+                  <p className="text-gray-700 font-mono text-[10px] break-all">{pass.id}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Action Buttons - Compact */}
+          <div className="flex flex-wrap gap-2 pt-1">
             <button
               onClick={() => setShowHistory(true)}
-              className="flex-1 sm:flex-none px-5 py-2.5 rounded-lg bg-gradient-to-r from-green-600 to-emerald-600 text-white font-medium hover:shadow-lg hover:scale-105 transition-all duration-200"
+              className="flex-1 min-w-[100px] px-3 py-2 rounded-lg bg-gradient-to-r from-green-600 to-emerald-600 text-white text-xs font-medium hover:shadow-lg hover:scale-105 transition-all duration-200"
             >
-              📋 Status History
+              📋 History
             </button>
             <button
               onClick={() => onPrint(pass)}
-              className="flex-1 sm:flex-none px-5 py-2.5 rounded-lg bg-gradient-to-r from-emerald-600 to-green-600 text-white font-medium hover:shadow-lg hover:scale-105 transition-all duration-200"
+              className="flex-1 min-w-[100px] px-3 py-2 rounded-lg bg-gradient-to-r from-emerald-600 to-green-600 text-white text-xs font-medium hover:shadow-lg hover:scale-105 transition-all duration-200"
             >
               🖨️ Print
             </button>
@@ -276,29 +295,19 @@ function GatepassCard({ pass, onPrint }: { pass: GatePassOut; onPrint: (pass: Ga
       </article>
 
       {/* Modals */}
-      {showHistory && (
-        <StatusHistoryModal
-          history={pass.status_history}
-          onClose={() => setShowHistory(false)}
-        />
-      )}
+      {showHistory && <StatusHistoryModal history={pass.status_history} onClose={() => setShowHistory(false)} />}
       {showExitPhoto && pass.exit_photo_id && (
-        <ImagePreviewModal
-          imageId={pass.exit_photo_id}
-          onClose={() => setShowExitPhoto(false)}
-        />
+        <ImagePreviewModal imageId={pass.exit_photo_id} onClose={() => setShowExitPhoto(false)} />
       )}
       {showReturnPhoto && pass.return_photo_id && (
-        <ImagePreviewModal
-          imageId={pass.return_photo_id}
-          onClose={() => setShowReturnPhoto(false)}
-        />
+        <ImagePreviewModal imageId={pass.return_photo_id} onClose={() => setShowReturnPhoto(false)} />
       )}
     </>
   );
 }
 
 export default function HR() {
+  useAuthCheck(["hrwala"]);
   const [mode, setMode] = useState<"choose" | "create" | "view">("choose");
 
   // Create form state
@@ -308,17 +317,14 @@ export default function HR() {
   const [creating, setCreating] = useState(false);
 
   // View state
-  const [viewMode, setViewMode] = useState<"all" | "byId" | null>(null);
-  const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
   const [passes, setPasses] = useState<GatePassOut[] | null>(null);
-  const [singlePass, setSinglePass] = useState<GatePassOut | null>(null);
-  const [queryId, setQueryId] = useState("");
   const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState<{ type: "error" | "success" | "info"; text: string } | null>(null);
 
-  // messages
-  const [message, setMessage] = useState<{ type: "error" | "success" | "info"; text: string } | null>(
-    null
-  );
+  // Filter states
+  const [statusFilter, setStatusFilter] = useState<string>("");
+  const [numberFilter, setNumberFilter] = useState<string>("");
+  const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
     if (!message) return;
@@ -356,7 +362,7 @@ export default function HR() {
       // optionally switch to view all
       setMode("view");
       setViewMode("all");
-      fetchAll(statusFilter);
+      fetchAll(statusFilter || undefined);
     } catch (err: any) {
       console.error(err);
       const text = err?.response?.data?.detail || err?.message || "Create failed";
@@ -366,16 +372,20 @@ export default function HR() {
     }
   }
 
+  // View state
+  const [viewMode, setViewMode] = useState<"all" | "byId" | null>(null);
+
   async function fetchAll(status?: string) {
     setLoading(true);
     setPasses(null);
-    setSinglePass(null);
     try {
       const res = await listMyGatepasses(status);
       setPasses(res || []);
+      setMessage({ type: "success", text: `Loaded ${res?.length || 0} gatepass(es)` });
     } catch (err: any) {
       console.error(err);
-      setMessage({ type: "error", text: String(err?.response?.data || err?.message || "Failed to fetch") });
+      const text = err?.response?.data?.detail || err?.message || "Failed to fetch gatepasses";
+      setMessage({ type: "error", text: String(text) });
     } finally {
       setLoading(false);
     }
@@ -387,20 +397,21 @@ export default function HR() {
       return;
     }
     setLoading(true);
-    setSinglePass(null);
     setPasses(null);
     try {
       const res = await getGatepassDetail(id.trim());
-      setSinglePass(res);
+      setPasses([res]);
+      setMessage({ type: "success", text: `Found gatepass: ${res.number}` });
     } catch (err: any) {
       console.error(err);
-      const text = err?.response?.data?.detail || err?.message || "Failed to fetch";
+      const text = err?.response?.data?.detail || err?.message || "Failed to fetch gatepass";
       setMessage({ type: "error", text: String(text) });
     } finally {
       setLoading(false);
     }
   }
 
+  // Mock print function - replace with your actual API call
   async function handlePrint(pass: GatePassOut) {
     try {
       setMessage({ type: "info", text: "Preparing download..." });
@@ -418,7 +429,17 @@ export default function HR() {
       setMessage({ type: "success", text: `Downloaded ${filename}` });
     } catch (err: any) {
       console.error(err);
-      setMessage({ type: "error", text: String(err?.response?.data || err?.message || "Print failed") });
+      const text = err?.response?.data?.detail || err?.message || "Print failed";
+      setMessage({ type: "error", text: String(text) });
+    }
+  }
+
+  // Apply filters
+  function applyFilters() {
+    if (numberFilter.trim()) {
+      fetchById(numberFilter);
+    } else {
+      fetchAll(statusFilter || undefined);
     }
   }
 
@@ -549,8 +570,8 @@ export default function HR() {
               <div>
                 <div className="flex items-center justify-between mb-6 pb-4 border-b-2 border-green-100">
                   <h2 className="text-2xl font-bold text-emerald-800">View Gatepasses</h2>
-                  <button 
-                    onClick={() => setMode("choose")} 
+                  <button
+                    onClick={() => setMode("choose")}
                     className="px-4 py-2 rounded-lg text-sm border-2 border-gray-200 hover:border-emerald-300 hover:bg-emerald-50 transition-all duration-200 font-medium"
                   >
                     ← Back
@@ -561,7 +582,7 @@ export default function HR() {
                   <button
                     onClick={() => {
                       setViewMode("all");
-                      fetchAll(statusFilter);
+                      fetchAll(statusFilter || undefined);
                     }}
                     className="w-full sm:w-48 px-4 py-3 rounded-lg border-2 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 hover:border-emerald-300 transition-all duration-200 font-medium text-emerald-800"
                   >
@@ -570,15 +591,15 @@ export default function HR() {
 
                   <div className="w-full sm:w-auto flex gap-2">
                     <input
-                      value={queryId}
-                      onChange={(e) => setQueryId(e.target.value)}
+                      value={numberFilter}
+                      onChange={(e) => setNumberFilter(e.target.value)}
                       placeholder="Enter Gatepass ID"
                       className="flex-1 rounded-lg border-2 border-gray-200 focus:border-green-400 focus:ring-2 focus:ring-green-100 px-4 py-3 text-sm transition-all duration-200 outline-none"
                     />
                     <button
                       onClick={() => {
                         setViewMode("byId");
-                        fetchById(queryId);
+                        fetchById(numberFilter);
                       }}
                       className="px-4 py-3 rounded-lg border-2 border-green-200 bg-green-50 hover:bg-green-100 hover:border-green-300 transition-all duration-200 font-medium text-green-800"
                     >
@@ -591,13 +612,13 @@ export default function HR() {
                 <div className="mb-5 flex flex-wrap gap-3 items-center p-4 rounded-lg bg-gray-50 border border-gray-200">
                   <label className="text-sm font-medium text-gray-700">Filter by status:</label>
                   <input
-                    value={statusFilter ?? ""}
-                    onChange={(e) => setStatusFilter(e.target.value || undefined)}
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
                     placeholder="e.g. approved"
                     className="rounded-lg border-2 border-gray-200 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 px-3 py-2 text-sm transition-all duration-200 outline-none"
                   />
                   <button
-                    onClick={() => fetchAll(statusFilter)}
+                    onClick={() => fetchAll(statusFilter || undefined)}
                     className="px-4 py-2 rounded-lg border-2 border-emerald-200 bg-emerald-50 hover:bg-emerald-100 hover:border-emerald-300 transition-all duration-200 text-sm font-medium text-emerald-800"
                   >
                     🔄 Refresh
@@ -622,14 +643,16 @@ export default function HR() {
                         </div>
                       )}
                       {passes.map((p) => (
-                        <GatepassCard key={p.id} pass={p} onPrint={handlePrint} />
+                        <HRGatepassCard key={p.id} pass={p} onPrint={handlePrint} />
                       ))}
                     </div>
                   )}
 
-                  {viewMode === "byId" && singlePass && (
+                  {viewMode === "byId" && passes && passes.length > 0 && (
                     <div className="space-y-6">
-                      <GatepassCard pass={singlePass} onPrint={handlePrint} />
+                      {passes.map((p) => (
+                        <HRGatepassCard key={p.id} pass={p} onPrint={handlePrint} />
+                      ))}
                     </div>
                   )}
                 </div>
