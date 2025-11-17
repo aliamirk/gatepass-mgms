@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 
 // Hardcoded password - change this as needed
 const CORRECT_PASSWORD = "gate2025";
@@ -29,7 +29,6 @@ async function scanReturn(pass_number: string, file: File) {
   const formData = new FormData();
   formData.append("pass_number", pass_number);
   formData.append("file", file);
-  console.log(formData);
 
   const res = await fetch("https://gatepass-api.cushtello.shop/gate/scan-return", {
     method: "POST",
@@ -57,7 +56,8 @@ function Message({ type, text }: { type: "error" | "success" | "info"; text: str
   return <div className={`${base} ${cls}`}>{text}</div>;  
 }
 
-export default function GatepassPage() {
+// Separate component that uses useSearchParams
+function GatepassContent() {
   const searchParams = useSearchParams();
   const queryGid = searchParams.get("gid") || "";
 
@@ -122,7 +122,6 @@ export default function GatepassPage() {
       if (uploadType === "exit") {
         response = await scanExit(gid, selectedFile);
       } else {
-        console.log(gid)
         response = await scanReturn(gid, selectedFile);
       }
 
@@ -382,7 +381,7 @@ export default function GatepassPage() {
                       onClick={() => setShowPassword(!showPassword)}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 transition-colors"
                     >
-                      {showPassword ? "Hide" : "Show"}
+                      {showPassword ? "👁️" : "👁️‍🗨️"}
                     </button>
                   </div>
                   {passwordError && (
@@ -475,5 +474,21 @@ export default function GatepassPage() {
         </div>
       )}
     </div>
+  );
+}
+
+// Main component with Suspense wrapper
+export default function GatepassPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 via-white to-emerald-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-4 border-emerald-200 border-t-emerald-600 mx-auto mb-4"></div>
+          <p className="text-gray-600 font-medium">Loading...</p>
+        </div>
+      </div>
+    }>
+      <GatepassContent />
+    </Suspense>
   );
 }
