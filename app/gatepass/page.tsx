@@ -3,8 +3,66 @@
 import { useSearchParams } from "next/navigation";
 import { useState, useEffect, Suspense } from "react";
 
-// Hardcoded password - change this as needed
 const CORRECT_PASSWORD = "gate2025";
+
+async function compressImage(file: File): Promise<File> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    
+    reader.onload = (e) => {
+      const img = new Image();
+      
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        
+        const maxWidth = 1920;
+        if (width > maxWidth) {
+          height = (height * maxWidth) / width;
+          width = maxWidth;
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('Failed to get canvas context'));
+          return;
+        }
+        
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        // Convert to JPEG with 0.85 quality
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) {
+              reject(new Error('Failed to compress image'));
+              return;
+            }
+            
+            const compressedFile = new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), {
+              type: 'image/jpeg',
+              lastModified: Date.now(),
+            });
+            
+            console.log(`Image compressed: ${(file.size / (1024 * 1024)).toFixed(2)}MB → ${(blob.size / (1024 * 1024)).toFixed(2)}MB`);
+            resolve(compressedFile);
+          },
+          'image/jpeg',
+          0.85
+        );
+      };
+      
+      img.onerror = () => reject(new Error('Failed to load image'));
+      img.src = e.target?.result as string;
+    };
+    
+    reader.onerror = () => reject(new Error('Failed to read file'));
+    reader.readAsDataURL(file);
+  });
+}
 
 // API call functions
 async function scanExit(pass_number: string, file: File) {
@@ -15,13 +73,7 @@ async function scanExit(pass_number: string, file: File) {
   const res = await fetch("https://gatepass-api.cushtello.shop/gate/scan-exit", {
     method: "POST",
     body: formData,
-    cache: "no-store", // Disable caching
   });
-  
-  if (!res.ok) {
-    const errorText = await res.text();
-    throw new Error(`HTTP ${res.status}: ${errorText}`);
-  }
   
   return res.json();
 }
@@ -34,13 +86,7 @@ async function scanReturn(pass_number: string, file: File) {
   const res = await fetch("https://gatepass-api.cushtello.shop/gate/scan-return", {
     method: "POST",
     body: formData,
-    cache: "no-store", // Disable caching
   });
-  
-  if (!res.ok) {
-    const errorText = await res.text();
-    throw new Error(`HTTP ${res.status}: ${errorText}`);
-  }
   
   return res.json();
 }
@@ -58,7 +104,7 @@ function Message({ type, text }: { type: "error" | "success" | "info"; text: str
   return <div className={`${base} ${cls}`}>{text}</div>;  
 }
 
-// Separate component that uses useSearchParams
+// Main content component
 function GatepassContent() {
   const searchParams = useSearchParams();
   const queryGid = searchParams.get("gid") || "";
@@ -72,6 +118,7 @@ function GatepassContent() {
   const [uploading, setUploading] = useState(false);
   const [showSourceModal, setShowSourceModal] = useState(false);
   const [pendingType, setPendingType] = useState<"exit" | "return" | null>(null);
+  const [compressing, setCompressing] = useState(false);
   
   // Password modal states
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -89,11 +136,28 @@ function GatepassContent() {
     return () => clearTimeout(t);
   }, [message]);
 
-  const handleFileSelection = (file: File, type: "exit" | "return") => {
-    setSelectedFile(file);
-    setUploadType(type);
-    setPreviewUrl(URL.createObjectURL(file));
-    setModalOpen(true);
+  const handleFileSelection = async (file: File, type: "exit" | "return") => {
+    console.log("File selected:", {
+      name: file.name,
+      size: file.size,
+      type: file.type
+    });
+
+    try {
+      // Compress image before preview
+      setCompressing(true);
+      const compressedFile = await compressImage(file);
+      
+      setSelectedFile(compressedFile);
+      setUploadType(type);
+      setPreviewUrl(URL.createObjectURL(compressedFile));
+      setModalOpen(true);
+      setCompressing(false);
+    } catch (error) {
+      console.error("Compression error:", error);
+      setMessage({ type: "error", text: "Failed to process image. Please try again." });
+      setCompressing(false);
+    }
   };
 
   const handleConfirmPreview = () => {
@@ -117,7 +181,19 @@ function GatepassContent() {
     setPasswordError("");
     setUploading(true);
 
-    if (!selectedFile || !uploadType || !gid) return;
+    if (!selectedFile || !uploadType || !gid) {
+      setMessage({ type: "error", text: "Missing required data" });
+      setUploading(false);
+      return;
+    }
+
+    console.log("Starting upload:", {
+      gid,
+      uploadType,
+      fileName: selectedFile.name,
+      fileSize: selectedFile.size,
+      fileType: selectedFile.type
+    });
 
     try {
       let response;
@@ -127,16 +203,19 @@ function GatepassContent() {
         response = await scanReturn(gid, selectedFile);
       }
 
+      console.log("Upload response:", response);
+
       if (response?.id || response?.number) {
-        setMessage({ type: "success", text: `Success! Status: ${response.status}` });
+        setMessage({ type: "success", text: `Success! Status: ${response.status || "Uploaded"}` });
       } else if (response?.detail) {
         setMessage({ type: "error", text: `Error: ${response.detail}` });
       } else {
-        setMessage({ type: "error", text: "Unknown response from server" });
+        setMessage({ type: "success", text: "File uploaded successfully!" });
       }
     } catch (err: any) {
-      console.error(err);
-      setMessage({ type: "error", text: "Upload failed. Check console for details." });
+      console.error("Upload error:", err);
+      const errorMsg = err.message || "Upload failed";
+      setMessage({ type: "error", text: `Upload failed: ${errorMsg}` });
     } finally {
       setUploading(false);
       setSelectedFile(null);
@@ -148,6 +227,9 @@ function GatepassContent() {
   const handleCancelPreview = () => {
     setModalOpen(false);
     setSelectedFile(null);
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+    }
     setPreviewUrl(null);
     setUploadType(null);
   };
@@ -156,9 +238,6 @@ function GatepassContent() {
     setShowPasswordModal(false);
     setPasswordInput("");
     setPasswordError("");
-    setSelectedFile(null);
-    setPreviewUrl(null);
-    setUploadType(null);
   };
 
   const triggerFileInput = (type: "exit" | "return") => {
@@ -174,13 +253,29 @@ function GatepassContent() {
   const openCamera = () => {
     const input = document.createElement("input");
     input.type = "file";
-    input.accept = "image/*";
+    input.accept = "image/jpeg,image/jpg,image/png";
     input.capture = "environment";
-    input.onchange = (e: any) => {
-      if (e.target.files && e.target.files[0]) {
-        handleFileSelection(e.target.files[0], pendingType!);
+    
+    input.onchange = async (e: any) => {
+      const file = e.target.files?.[0];
+      if (file) {
+        console.log("Camera file selected:", {
+          name: file.name,
+          size: file.size,
+          type: file.type
+        });
+        await handleFileSelection(file, pendingType!);
+      } else {
+        console.error("No file selected from camera");
+        setMessage({ type: "error", text: "No image captured" });
       }
     };
+    
+    input.onerror = (err) => {
+      console.error("Camera input error:", err);
+      setMessage({ type: "error", text: "Failed to open camera" });
+    };
+    
     input.click();
     setShowSourceModal(false);
   };
@@ -188,12 +283,28 @@ function GatepassContent() {
   const openGallery = () => {
     const input = document.createElement("input");
     input.type = "file";
-    input.accept = "image/*";
-    input.onchange = (e: any) => {
-      if (e.target.files && e.target.files[0]) {
-        handleFileSelection(e.target.files[0], pendingType!);
+    input.accept = "image/jpeg,image/jpg,image/png";
+    
+    input.onchange = async (e: any) => {
+      const file = e.target.files?.[0];
+      if (file) {
+        console.log("Gallery file selected:", {
+          name: file.name,
+          size: file.size,
+          type: file.type
+        });
+        await handleFileSelection(file, pendingType!);
+      } else {
+        console.error("No file selected from gallery");
+        setMessage({ type: "error", text: "No image selected" });
       }
     };
+    
+    input.onerror = (err) => {
+      console.error("Gallery input error:", err);
+      setMessage({ type: "error", text: "Failed to open gallery" });
+    };
+    
     input.click();
     setShowSourceModal(false);
   };
@@ -271,7 +382,8 @@ function GatepassContent() {
                     <li>• Enter the gatepass number or scan QR code</li>
                     <li>• Click "Scan Exit Image" when person is leaving</li>
                     <li>• Click "Scan Return Image" when person returns</li>
-                    <li>• Ensure images are clear and well-lit</li>
+                    <li>• Use camera or select from gallery</li>
+                    <li>• Images are automatically compressed for faster upload</li>
                     <li>• Password required for upload confirmation</li>
                   </ul>
                 </div>
@@ -313,6 +425,10 @@ function GatepassContent() {
                   <span className="font-semibold">Gatepass:</span> {gid}
                   <br />
                   <span className="font-semibold">Type:</span> {uploadType === "exit" ? "Exit" : "Return"}
+                  <br />
+                  {selectedFile && (
+                    <span className="text-gray-500">Size: {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB</span>
+                  )}
                 </p>
               </div>
             </div>
@@ -439,13 +555,13 @@ function GatepassContent() {
                 onClick={openCamera}
                 className="w-full px-6 py-4 rounded-xl shadow-md border-2 border-emerald-100 bg-gradient-to-br from-emerald-600 to-green-600 text-white hover:shadow-xl hover:scale-105 transition-all duration-300 flex items-center justify-center font-semibold"
               >
-                <span className="mr-2 text-xl">📸</span> Use Camera
+                Use Camera
               </button>
               <button
                 onClick={openGallery}
                 className="w-full px-6 py-4 rounded-xl shadow-md border-2 border-green-100 bg-gradient-to-br from-green-600 to-emerald-600 text-white hover:shadow-xl hover:scale-105 transition-all duration-300 flex items-center justify-center font-semibold"
               >
-                <span className="mr-2 text-xl">🖼️</span> Choose from Gallery
+                Choose from Gallery
               </button>
               <button
                 onClick={() => setShowSourceModal(false)}
@@ -458,7 +574,25 @@ function GatepassContent() {
         </div>
       )}
 
-      {/* Loading Spinner */}
+      {/* Compression Loader */}
+      {compressing && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 flex flex-col items-center space-y-4 animate-in zoom-in-95 duration-200">
+            <div className="relative">
+              <div className="animate-spin rounded-full h-16 w-16 border-4 border-emerald-200 border-t-emerald-600"></div>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="text-2xl">🖼️</span>
+              </div>
+            </div>
+            <div className="text-center">
+              <p className="text-lg font-semibold text-gray-800">Processing Image</p>
+              <p className="text-sm text-gray-600 mt-1">Compressing for faster upload...</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Upload Loader */}
       {uploading && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl shadow-2xl p-8 flex flex-col items-center space-y-4 animate-in zoom-in-95 duration-200">
@@ -479,17 +613,19 @@ function GatepassContent() {
   );
 }
 
-// Main component with Suspense wrapper
+// Main page component with Suspense wrapper
 export default function GatepassPage() {
   return (
-    <Suspense fallback={
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 via-white to-emerald-50">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-4 border-emerald-200 border-t-emerald-600 mx-auto mb-4"></div>
-          <p className="text-gray-600 font-medium">Loading...</p>
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 via-white to-emerald-50">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-16 w-16 border-4 border-emerald-200 border-t-emerald-600 mx-auto mb-4"></div>
+            <p className="text-gray-600 font-medium">Loading...</p>
+          </div>
         </div>
-      </div>
-    }>
+      }
+    >
       <GatepassContent />
     </Suspense>
   );
