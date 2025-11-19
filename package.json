@@ -16,6 +16,8 @@
     "@uppy/webcam": "^5.0.2",
     "@uppy/xhr-upload": "^5.0.2",
     "axios": "^1.13.2",
+    "date-fns": "^4.1.0",
+    "date-fns-tz": "^3.2.0",
     "framer-motion": "^12.23.24",
     "heic-convert": "^2.1.0",
     "heic2any": "^0.0.4",

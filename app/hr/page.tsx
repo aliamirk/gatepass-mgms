@@ -12,7 +12,21 @@ import {
 } from "../../backend/hr";
 import useAuthCheck from "@/lib/useAuthCheck";
 
+import { parseISO, format } from "date-fns";
+import { toZonedTime } from "date-fns-tz";
 
+function PKTDate({ dateString }: { dateString: any }) {
+  // Ensure string is treated as UTC by adding 'Z'
+  const parsedDate = parseISO(dateString.endsWith("Z") ? dateString : dateString + "Z");
+
+  // Convert to PKT
+  const pktDate = format(
+    toZonedTime(parsedDate, "Asia/Karachi"),
+    "dd/MM/yyyy HH:mm:ss"
+  );
+
+  return <span className="text-xs text-gray-700">{pktDate}</span>;
+}
 
 // Simple small status/toast component 
 function Message({ type, text }: { type: "error" | "success" | "info"; text: string | null }) {
@@ -53,9 +67,7 @@ function StatusHistoryModal({ history, onClose }: { history?: any[]; onClose: ()
                     <span className="inline-block px-3 py-1 rounded-full bg-emerald-100 text-emerald-700 text-sm font-semibold">
                       {h.status}
                     </span>
-                    <span className="text-xs text-gray-500">
-                      {new Date(h.changed_at).toLocaleString()}
-                    </span>
+                    <PKTDate dateString={h.changed_at} />
                   </div>
                   <div className="text-sm text-gray-600">
                     Changed by: <span className="font-medium">{h.changed_by}</span>
@@ -197,7 +209,7 @@ function HRGatepassCard({
           <div className="grid grid-cols-2 gap-2 text-xs">
             <div className="p-2 rounded bg-white border border-green-100">
               <div className="text-[10px] font-semibold text-gray-500 uppercase mb-0.5">Created</div>
-              <p className="text-gray-700 leading-tight">{new Date(pass.created_at).toLocaleDateString()}</p>
+              <p className="text-gray-700 leading-tight"><PKTDate dateString={pass.created_at} /></p>
             </div>
 
             <div className="p-2 rounded bg-white border border-green-100">
@@ -208,14 +220,14 @@ function HRGatepassCard({
             {pass.exit_time && (
               <div className="p-2 rounded bg-white border border-green-100">
                 <div className="text-[10px] font-semibold text-gray-500 uppercase mb-0.5">Exit</div>
-                <p className="text-gray-700 leading-tight">{new Date(pass.exit_time).toLocaleString()}</p>
+                <p className="text-gray-700 leading-tight"><PKTDate dateString={pass.exit_time} /></p>
               </div>
             )}
 
             {pass.return_time && (
               <div className="p-2 rounded bg-white border border-green-100">
                 <div className="text-[10px] font-semibold text-gray-500 uppercase mb-0.5">Return</div>
-                <p className="text-gray-700 leading-tight">{new Date(pass.return_time).toLocaleString()}</p>
+                <p className="text-gray-700 leading-tight"><PKTDate dateString={pass.return_time} /></p>
               </div>
             )}
           </div>
@@ -260,7 +272,7 @@ function HRGatepassCard({
 
                 <div className="p-2 rounded bg-white border border-green-100">
                   <div className="text-[10px] font-semibold text-gray-500 uppercase mb-0.5">Approved At</div>
-                  <p className="text-gray-700">{formatValue(pass.approved_at)}</p>
+                  <p className="text-gray-700"><PKTDate dateString={pass.approved_at} /></p>
                 </div>
 
                 <div className="p-2 rounded bg-white border border-green-100">
