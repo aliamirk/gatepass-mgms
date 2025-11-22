@@ -1,9 +1,16 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, Suspense, useRef } from "react";
 
 const CORRECT_PASSWORD = "gate2025";
+
+// Utility function to detect if device is mobile
+const isMobileDevice = () => {
+  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
+    navigator.userAgent
+  ) || (navigator.maxTouchPoints && navigator.maxTouchPoints > 2);
+};
 
 async function compressImage(file: File): Promise<File> {
   return new Promise((resolve, reject) => {
@@ -104,6 +111,129 @@ function Message({ type, text }: { type: "error" | "success" | "info"; text: str
   return <div className={`${base} ${cls}`}>{text}</div>;  
 }
 
+// Webcam Capture Component for Desktop
+function WebcamCapture({ onCapture, onClose }: { 
+  onCapture: (file: File) => void; 
+  onClose: () => void;
+}) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const [isReady, setIsReady] = useState(false);
+
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: 'user' },
+        audio: false 
+      });
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        streamRef.current = stream;
+        setIsReady(true);
+      }
+    } catch (err) {
+      console.error("Error accessing webcam:", err);
+      alert("Could not access webcam. Please check permissions.");
+      onClose();
+    }
+  };
+
+  const capturePhoto = () => {
+    if (!videoRef.current || !canvasRef.current) return;
+
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.drawImage(video, 0, 0);
+      
+      canvas.toBlob((blob) => {
+        if (blob) {
+          const file = new File([blob], `webcam-${Date.now()}.jpg`, { 
+            type: 'image/jpeg' 
+          });
+          stopCamera();
+          onCapture(file);
+          onClose();
+        }
+      }, 'image/jpeg', 0.95);
+    }
+  };
+
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+  };
+
+  const handleClose = () => {
+    stopCamera();
+    onClose();
+  };
+
+  useEffect(() => {
+    startCamera();
+    return () => stopCamera();
+  }, []);
+
+  return (
+    <div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-[70] animate-in fade-in duration-200">
+      <div className="w-full max-w-4xl flex flex-col items-center">
+        <div className="mb-4 text-center">
+          <h3 className="text-2xl font-bold text-white mb-2">📷 Webcam Capture</h3>
+          <p className="text-gray-300 text-sm">Position yourself and click capture</p>
+        </div>
+        
+        <div className="relative bg-black rounded-2xl overflow-hidden shadow-2xl border-4 border-emerald-500">
+          <video 
+            ref={videoRef}
+            autoPlay
+            playsInline
+            className="max-w-full max-h-[60vh] object-contain"
+          />
+          {!isReady && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/80">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-4 border-emerald-200 border-t-emerald-600 mx-auto mb-3"></div>
+                <p className="text-white font-medium">Starting camera...</p>
+              </div>
+            </div>
+          )}
+        </div>
+        
+        <canvas ref={canvasRef} className="hidden" />
+        
+        <div className="mt-6 flex gap-4">
+          <button
+            onClick={capturePhoto}
+            disabled={!isReady}
+            className={`px-8 py-4 text-lg font-semibold rounded-xl shadow-lg transition-all duration-300 ${
+              isReady
+                ? 'bg-gradient-to-r from-emerald-600 to-green-600 text-white hover:shadow-xl hover:scale-105'
+                : 'bg-gray-600 text-gray-300 cursor-not-allowed'
+            }`}
+          >
+            📸 Capture Photo
+          </button>
+          <button
+            onClick={handleClose}
+            className="px-8 py-4 text-lg font-semibold rounded-xl bg-red-600 text-white hover:bg-red-700 hover:shadow-xl hover:scale-105 transition-all duration-300"
+          >
+            ✕ Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Main content component
 function GatepassContent() {
   const searchParams = useSearchParams();
@@ -119,6 +249,7 @@ function GatepassContent() {
   const [showSourceModal, setShowSourceModal] = useState(false);
   const [pendingType, setPendingType] = useState<"exit" | "return" | null>(null);
   const [compressing, setCompressing] = useState(false);
+  const [showWebcamModal, setShowWebcamModal] = useState(false);
   
   // Password modal states
   const [showPasswordModal, setShowPasswordModal] = useState(false);
@@ -251,33 +382,42 @@ function GatepassContent() {
   };
 
   const openCamera = () => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = "image/jpeg,image/jpg,image/png";
-    input.capture = "environment";
+    const isMobile = isMobileDevice();
     
-    input.onchange = async (e: any) => {
-      const file = e.target.files?.[0];
-      if (file) {
-        console.log("Camera file selected:", {
-          name: file.name,
-          size: file.size,
-          type: file.type
-        });
-        await handleFileSelection(file, pendingType!);
-      } else {
-        console.error("No file selected from camera");
-        setMessage({ type: "error", text: "No image captured" });
-      }
-    };
-    
-    input.onerror = (err) => {
-      console.error("Camera input error:", err);
-      setMessage({ type: "error", text: "Failed to open camera" });
-    };
-    
-    input.click();
-    setShowSourceModal(false);
+    if (isMobile) {
+      // Mobile: Use file input with capture attribute
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = "image/jpeg,image/jpg,image/png";
+      input.capture = "environment";
+      
+      input.onchange = async (e: any) => {
+        const file = e.target.files?.[0];
+        if (file) {
+          console.log("Camera file selected:", {
+            name: file.name,
+            size: file.size,
+            type: file.type
+          });
+          await handleFileSelection(file, pendingType!);
+        } else {
+          console.error("No file selected from camera");
+          setMessage({ type: "error", text: "No image captured" });
+        }
+      };
+      
+      input.onerror = (err) => {
+        console.error("Camera input error:", err);
+        setMessage({ type: "error", text: "Failed to open camera" });
+      };
+      
+      input.click();
+      setShowSourceModal(false);
+    } else {
+      // Desktop: Open webcam capture modal
+      setShowWebcamModal(true);
+      setShowSourceModal(false);
+    }
   };
 
   const openGallery = () => {
@@ -555,13 +695,13 @@ function GatepassContent() {
                 onClick={openCamera}
                 className="w-full px-6 py-4 rounded-xl shadow-md border-2 border-emerald-100 bg-gradient-to-br from-emerald-600 to-green-600 text-white hover:shadow-xl hover:scale-105 transition-all duration-300 flex items-center justify-center font-semibold"
               >
-                Use Camera
+                {isMobileDevice() ? '📸 Use Camera' : '🎥 Use Webcam'}
               </button>
               <button
                 onClick={openGallery}
                 className="w-full px-6 py-4 rounded-xl shadow-md border-2 border-green-100 bg-gradient-to-br from-green-600 to-emerald-600 text-white hover:shadow-xl hover:scale-105 transition-all duration-300 flex items-center justify-center font-semibold"
               >
-                Choose from Gallery
+                🖼️ Choose from Gallery
               </button>
               <button
                 onClick={() => setShowSourceModal(false)}
@@ -572,6 +712,16 @@ function GatepassContent() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Webcam Capture Modal */}
+      {showWebcamModal && (
+        <WebcamCapture
+          onCapture={async (file) => {
+            await handleFileSelection(file, pendingType!);
+          }}
+          onClose={() => setShowWebcamModal(false)}
+        />
       )}
 
       {/* Compression Loader */}
