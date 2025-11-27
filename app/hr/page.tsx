@@ -16,17 +16,23 @@ import { parseISO, format } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
 
 function PKTDate({ dateString }: { dateString: any }) {
-  // Ensure string is treated as UTC by adding 'Z'
-  const parsedDate = parseISO(dateString.endsWith("Z") ? dateString : dateString + "Z");
+  try {
+    if (!dateString) throw new Error("No date");
 
-  // Convert to PKT
-  const pktDate = format(
-    toZonedTime(parsedDate, "Asia/Karachi"),
-    "dd/MM/yyyy HH:mm:ss"
-  );
+    const iso = dateString.endsWith("Z") ? dateString : dateString + "Z";
+    const parsed = parseISO(iso);
 
-  return <span className="text-xs text-gray-700">{pktDate}</span>;
+    const pkt = format(
+      toZonedTime(parsed, "Asia/Karachi"),
+      "dd/MM/yyyy HH:mm:ss"
+    );
+
+    return <span className="text-xs text-gray-700">{pkt}</span>;
+  } catch (e) {
+    return <span className="text-xs text-gray-700">Not Available</span>;
+  }
 }
+
 
 // Simple small status/toast component 
 function Message({ type, text }: { type: "error" | "success" | "info"; text: string | null }) {
@@ -440,9 +446,8 @@ export default function HR() {
       window.URL.revokeObjectURL(url);
       setMessage({ type: "success", text: `Downloaded ${filename}` });
     } catch (err: any) {
-      console.error(err);
       const text = err?.response?.data?.detail || err?.message || "Print failed";
-      setMessage({ type: "error", text: String(text) });
+      setMessage({ type: "error", text: "Gatepass cannot be downloaded without admin approval" });
     }
   }
 

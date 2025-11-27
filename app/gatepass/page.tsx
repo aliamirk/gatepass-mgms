@@ -1,5 +1,6 @@
 "use client";
 
+import { GatePassOut, printGatepass } from "@/backend/hr";
 import { useSearchParams } from "next/navigation";
 import { useState, useEffect, Suspense, useRef } from "react";
 
@@ -449,6 +450,32 @@ function GatepassContent() {
     setShowSourceModal(false);
   };
 
+    // Mock print function - replace with your actual API call
+    async function handlePrint(pass: string) {
+      if (!gid) {
+        setMessage({ type: "error", text: "Please enter a Gatepass Number first!" });
+        return;
+      }
+      try {
+        setMessage({ type: "info", text: "Preparing download..." });
+        const blob = await printGatepass(pass);
+        // try to infer filename
+        const filename = `${pass}.pdf`;
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+        setMessage({ type: "success", text: `Downloaded ${filename}` });
+      } catch (err: any) {
+        const text = err;
+        setMessage({ type: "error", text: `Gatepass ${pass} Not Found` });
+      }
+    }
+
   return (
     <div className="min-h-screen p-4 sm:p-8 bg-gradient-to-br from-green-50 via-white to-emerald-50">
       <div className="max-w-2xl mx-auto">
@@ -509,6 +536,12 @@ function GatepassContent() {
                 className="w-full px-6 py-4 rounded-xl shadow-md border-2 border-green-100 bg-gradient-to-br from-green-600 to-emerald-600 text-white hover:shadow-xl hover:scale-105 transition-all duration-300 flex items-center justify-center font-semibold text-base"
               >
                 Scan Return Image
+              </button>
+              <button
+                onClick={() => handlePrint(gid)}
+                className="w-full px-6 py-4 rounded-xl shadow-md border-2 border-green-100 bg-gradient-to-br from-green-600 to-emerald-600 text-white hover:shadow-xl hover:scale-105 transition-all duration-300 flex items-center justify-center font-semibold text-base"
+              >
+                🖨️ Print Gatepass
               </button>
             </div>
 
