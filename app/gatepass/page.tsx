@@ -1,6 +1,6 @@
 "use client";
 
-import { GatePassOut, printGatepass } from "@/backend/hr";
+import { GatePassOut, getGatepassDetail, printGatepass } from "@/backend/hr";
 import { useSearchParams } from "next/navigation";
 import { useState, useEffect, Suspense, useRef } from "react";
 
@@ -455,7 +455,19 @@ function GatepassContent() {
       if (!gid) {
         setMessage({ type: "error", text: "Please enter a Gatepass Number first!" });
         return;
+      }  
+
+      try {
+        const pass_status = getGatepassDetail(pass.trim());
+        if ((await pass_status).status == "rejected"){
+          setMessage({ type: "error", text: "Rejected gatepass cannot be printed" });
+          return;
       }
+      } catch (error) {
+        setMessage({ type: "error", text: `Gatepass ${pass} Not Found` });
+        return;
+      }
+
       try {
         setMessage({ type: "info", text: "Preparing download..." });
         const blob = await printGatepass(pass);
@@ -471,8 +483,7 @@ function GatepassContent() {
         window.URL.revokeObjectURL(url);
         setMessage({ type: "success", text: `Downloaded ${filename}` });
       } catch (err: any) {
-        const text = err;
-        setMessage({ type: "error", text: `Gatepass ${pass} Not Found` });
+        setMessage({ type: "error", text: `Gatepass cannot be downloaded without admin approval` });
       }
     }
 

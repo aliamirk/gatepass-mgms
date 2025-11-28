@@ -77,7 +77,7 @@ export const getGatepassDetail = async (pass_id: string): Promise<GatePassOut> =
 };
 
 export const printGatepass = async (pass_id: string): Promise<Blob> => {
-  const response = await api.get(`/hr/gatepass/${pass_id}/print`, {
+  const response = await api.get(`/admin/gatepass/${pass_id}/print`, {
     responseType: "blob",
   });
   return response.data;

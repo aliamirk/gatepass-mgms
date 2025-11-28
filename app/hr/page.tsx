@@ -431,6 +431,11 @@ export default function HR() {
 
   // Mock print function - replace with your actual API call
   async function handlePrint(pass: GatePassOut) {
+    const pass_status = getGatepassDetail(pass.number.trim());
+    if ((await pass_status).status == "rejected"){
+      setMessage({ type: "error", text: "Rejected gatepass cannot be printed" });
+      return;
+    }
     try {
       setMessage({ type: "info", text: "Preparing download..." });
       const blob = await printGatepass(pass.number);
