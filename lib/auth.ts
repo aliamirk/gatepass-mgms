@@ -6,7 +6,7 @@ export interface User {
   
 
 export const users = [
-    { username: "hrwala", password: "hrwala", redirect: "/hr" }
+    { username: "hrdept", password: "hr@32#", redirect: "/hr" },
   ];
   
   export const authenticate = (username: string, password: string) => {

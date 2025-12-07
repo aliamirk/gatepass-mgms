@@ -12,6 +12,7 @@ import {
 } from "../../backend/hr";
 import useAuthCheck from "@/lib/useAuthCheck";
 
+import { createPortal } from "react-dom"; 
 import { parseISO, format } from "date-fns";
 import { toZonedTime } from "date-fns-tz";
 
@@ -47,10 +48,10 @@ function Message({ type, text }: { type: "error" | "success" | "info"; text: str
   return <div className={`${base} ${cls}`}>{text}</div>;
 }
 
-// Status History Modal 
 function StatusHistoryModal({ history, onClose }: { history?: any[]; onClose: () => void }) {
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
       <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[80vh] overflow-hidden animate-in zoom-in-95 duration-200">
         <div className="p-6 border-b-2 border-green-100 flex justify-between items-center bg-gradient-to-r from-emerald-50 to-green-50">
           <h3 className="text-xl font-bold text-emerald-800">Status History</h3>
@@ -86,7 +87,8 @@ function StatusHistoryModal({ history, onClose }: { history?: any[]; onClose: ()
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -124,19 +126,27 @@ function ImagePreviewModal({
     };
   }, [imageId]);
 
-  return (
-    <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden animate-in zoom-in-95 duration-200">
+  return createPortal(
+    <div className="fixed inset-0 z-50 bg-black/80">
+      <div className="fixed left-1/2 top-1/2 z-50 w-full max-w-4xl max-h-[90vh]
+                      -translate-x-1/2 -translate-y-1/2
+                      bg-white rounded-2xl shadow-2xl
+                      overflow-hidden
+                      animate-in zoom-in-95 duration-200">
+
+        {/* Header */}
         <div className="p-4 border-b-2 border-green-100 flex justify-between items-center bg-gradient-to-r from-emerald-50 to-green-50">
           <h3 className="text-lg font-bold text-emerald-800">Image Preview</h3>
           <button
             onClick={onClose}
-            className="px-4 py-2 rounded-lg bg-white border-2 border-gray-200 hover:border-red-300 hover:bg-red-50 hover:text-red-600 transition-all duration-200 font-medium"
-          >
+            className="px-4 py-2 rounded-lg bg-white border-2 border-gray-200
+                       hover:border-red-300 hover:bg-red-50 hover:text-red-600
+                       transition-all duration-200 font-medium">
             ✕ Close
           </button>
         </div>
 
+        {/* Body */}
         <div className="p-6 flex items-center justify-center bg-gray-50">
           {imageUrl ? (
             <img
@@ -154,8 +164,10 @@ function ImagePreviewModal({
             </div>
           )}
         </div>
+
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
@@ -325,7 +337,7 @@ function HRGatepassCard({
 }
 
 export default function HR() {
-  useAuthCheck(["hrwala"]);
+  useAuthCheck(["hrdept"]);
   const [mode, setMode] = useState<"choose" | "create" | "view">("choose");
 
   // Create form state

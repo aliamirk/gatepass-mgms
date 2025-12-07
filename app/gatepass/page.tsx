@@ -4,8 +4,6 @@ import { GatePassOut, getGatepassDetail, printGatepass } from "@/backend/hr";
 import { useSearchParams } from "next/navigation";
 import { useState, useEffect, Suspense, useRef } from "react";
 
-const CORRECT_PASSWORD = "gate2025";
-
 // Utility function to detect if device is mobile
 const isMobileDevice = () => {
   return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
@@ -252,12 +250,6 @@ function GatepassContent() {
   const [compressing, setCompressing] = useState(false);
   const [showWebcamModal, setShowWebcamModal] = useState(false);
   
-  // Password modal states
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
-  const [passwordInput, setPasswordInput] = useState("");
-  const [passwordError, setPasswordError] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-
   useEffect(() => {
     if (queryGid) setGid(queryGid);
   }, [queryGid]);
@@ -292,25 +284,10 @@ function GatepassContent() {
     }
   };
 
-  const handleConfirmPreview = () => {
-    // Keep preview modal open and show password modal
-    setShowPasswordModal(true);
-    setPasswordInput("");
-    setPasswordError("");
-  };
-
-  const handlePasswordSubmit = async () => {
-    if (passwordInput !== CORRECT_PASSWORD) {
-      setPasswordError("Incorrect password. Please try again.");
-      setPasswordInput("");
-      return;
-    }
+  const handleConfirmPreview = async () => {
 
     // Password correct, close both modals and proceed with upload
-    setShowPasswordModal(false);
     setModalOpen(false);
-    setPasswordInput("");
-    setPasswordError("");
     setUploading(true);
 
     if (!selectedFile || !uploadType || !gid) {
@@ -364,12 +341,6 @@ function GatepassContent() {
     }
     setPreviewUrl(null);
     setUploadType(null);
-  };
-
-  const handleCancelPassword = () => {
-    setShowPasswordModal(false);
-    setPasswordInput("");
-    setPasswordError("");
   };
 
   const triggerFileInput = (type: "exit" | "return") => {
@@ -636,95 +607,6 @@ function GatepassContent() {
         </div>
       )}
 
-      {/* Password Modal */}
-      {showPasswordModal && (
-        <div className="fixed inset-0 bg-black/90 flex items-center justify-center p-4 z-[60] animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full animate-in zoom-in-95 duration-200">
-            {/* Modal Header */}
-            <div className="p-5 border-b-2 border-green-100 bg-gradient-to-r from-emerald-50 to-green-50">
-              <h3 className="text-xl font-bold text-emerald-800 flex items-center gap-2">
-                🔐 Authentication Required
-              </h3>
-              <p className="text-sm text-gray-600 mt-1">
-                Enter password to confirm upload
-              </p>
-            </div>
-
-            {/* Modal Body */}
-            <div className="p-6">
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-semibold mb-2 text-gray-700">
-                    Password *
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      value={passwordInput}
-                      onChange={(e) => {
-                        setPasswordInput(e.target.value);
-                        setPasswordError("");
-                      }}
-                      onKeyPress={(e) => {
-                        if (e.key === "Enter") {
-                          handlePasswordSubmit();
-                        }
-                      }}
-                      placeholder="Enter password"
-                      className={`w-full rounded-lg border-2 px-4 py-3 pr-12 text-sm transition-all duration-200 outline-none ${
-                        passwordError
-                          ? "border-red-300 focus:border-red-400 focus:ring-2 focus:ring-red-100"
-                          : "border-gray-200 focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
-                      }`}
-                      autoFocus
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 transition-colors"
-                    >
-                      {showPassword ? "👁️" : "👁️‍🗨️"}
-                    </button>
-                  </div>
-                  {passwordError && (
-                    <p className="text-xs text-red-600 mt-2 flex items-center gap-1">
-                      <span>⚠️</span> {passwordError}
-                    </p>
-                  )}
-                </div>
-
-                <div className="p-3 rounded-lg bg-blue-50 border border-blue-200">
-                  <p className="text-xs text-blue-800 flex items-start gap-2">
-                    <span className="text-base">💡</span>
-                    <span>This password protects unauthorized uploads. Contact admin if you don't have access.</span>
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Modal Footer */}
-            <div className="p-5 border-t-2 border-gray-100 bg-white flex flex-col sm:flex-row justify-end gap-2 sm:gap-3">
-              <button
-                onClick={handleCancelPassword}
-                className="w-full sm:w-auto px-6 py-2.5 rounded-lg border-2 border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all duration-200 font-medium order-2 sm:order-1"
-              >
-                ✕ Cancel
-              </button>
-              <button
-                onClick={handlePasswordSubmit}
-                disabled={!passwordInput}
-                className={`w-full sm:w-auto px-6 py-2.5 rounded-lg font-semibold transition-all duration-200 order-1 sm:order-2 ${
-                  passwordInput
-                    ? "bg-gradient-to-r from-emerald-600 to-green-600 text-white hover:shadow-lg hover:scale-105"
-                    : "bg-gray-200 text-gray-400 cursor-not-allowed"
-                }`}
-              >
-                🔓 Submit
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Source Selection Modal */}
       {showSourceModal && (
