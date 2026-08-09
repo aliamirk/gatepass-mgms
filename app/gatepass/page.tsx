@@ -1,3 +1,4 @@
+
 "use client";
 
 import { GatePassOut, getGatepassDetail, printGatepass } from "@/backend/hr";
@@ -76,7 +77,7 @@ async function scanExit(pass_number: string, file: File) {
   formData.append("pass_number", pass_number);
   formData.append("file", file);
 
-  const res = await fetch("https://gatepass-api.cushtello.shop/gate/scan-exit", {
+  const res = await fetch("https://in-gatepass-api.pakeezah.net/gate/scan-exit", {
     method: "POST",
     body: formData,
   });
@@ -89,7 +90,7 @@ async function scanReturn(pass_number: string, file: File) {
   formData.append("pass_number", pass_number);
   formData.append("file", file);
 
-  const res = await fetch("https://gatepass-api.cushtello.shop/gate/scan-return", {
+  const res = await fetch("https://in-gatepass-api.pakeezah.net/gate/scan-return", {
     method: "POST",
     body: formData,
   });
