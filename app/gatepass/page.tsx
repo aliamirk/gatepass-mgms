@@ -1,4 +1,3 @@
-
 "use client";
 
 import { GatePassOut, getGatepassDetail, printGatepass } from "@/backend/hr";
