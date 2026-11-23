@@ -123,3 +123,29 @@ export async function getGatePassPhotoFile(
     throw err;
   }
 }
+
+export type SubmissionPhotoType = "inhouse_challan" | "weighbridge_challan" | "vehicle_image" | "misc";
+
+export async function uploadSubmissionPhotos(
+  pass_number: string,
+  photo_type: SubmissionPhotoType,
+  files: File[]
+): Promise<void> {
+  const formData = new FormData();
+  formData.append("pass_number", pass_number);
+  formData.append("photo_type", photo_type);
+  files.forEach((f) => formData.append("files", f));
+  const res = await fetch(`${BASE_URL}/gate/upload-submission`, {
+    method: "POST",
+    body: formData,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.detail || "Upload failed");
+  }
+}
+
+export async function downloadComplete(pass_number: string): Promise<void> {
+  const res = await api.post(`/hr/gatepass/${pass_number}/download-complete`);
+  return res.data;
+}

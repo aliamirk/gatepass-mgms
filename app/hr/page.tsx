@@ -9,6 +9,10 @@ import {
   GatePassCreate,
   GatePassOut,
   getGatePassPhotoFile,
+  getGatePassPhotos,
+  uploadSubmissionPhotos,
+  downloadComplete,
+  SubmissionPhotoType,
 } from "../../backend/hr";
 import useAuthCheck from "@/lib/useAuthCheck";
 
@@ -172,6 +176,69 @@ function ImagePreviewModal({
 }
 
 // HR Gatepass Card Component
+// Gallery thumbnail
+function GalleryPhotoItem({ photo, idx }: { photo: { photo_id: string; type: string }; idx: number }) {
+  const [url, setUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let mounted = true;
+    getGatePassPhotoFile(photo.photo_id).then(blob => { if (mounted) setUrl(URL.createObjectURL(blob)); }).catch(() => {});
+    return () => { mounted = false; };
+  }, [photo.photo_id]);
+  return (
+    <div className="relative rounded-lg overflow-hidden border-2 border-green-100">
+      {url ? <img src={url} alt={`Photo ${idx+1}`} className="w-full h-40 object-cover" /> : <div className="w-full h-40 bg-gray-100 flex items-center justify-center"><div className="animate-spin rounded-full h-6 w-6 border-2 border-emerald-200 border-t-emerald-600"></div></div>}
+      <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-[10px] px-2 py-1 flex justify-between">
+        <span>#{idx+1}</span><span className="text-yellow-300">{photo.type.toUpperCase()}</span>
+      </div>
+    </div>
+  );
+}
+
+// Webcam Capture Component
+function WebcamCapture({ onCaptures, onClose, maxPhotos = 10 }: { onCaptures: (files: File[]) => void; onClose: () => void; maxPhotos?: number; }) {
+  const videoRef = React.useRef<HTMLVideoElement>(null);
+  const canvasRef = React.useRef<HTMLCanvasElement>(null);
+  const streamRef = React.useRef<MediaStream | null>(null);
+  const [isReady, setIsReady] = useState(false);
+  const [captured, setCaptured] = useState<{ file: File; url: string }[]>([]);
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+      if (videoRef.current) { videoRef.current.srcObject = stream; streamRef.current = stream; setIsReady(true); }
+    } catch { alert("Could not access webcam."); onClose(); }
+  };
+  const stopCamera = () => { if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; } };
+  const capturePhoto = () => {
+    if (!videoRef.current || !canvasRef.current || captured.length >= maxPhotos) return;
+    const v = videoRef.current; const c = canvasRef.current;
+    c.width = v.videoWidth; c.height = v.videoHeight;
+    c.getContext('2d')?.drawImage(v, 0, 0);
+    c.toBlob(blob => { if (!blob) return; const file = new File([blob], `webcam-${Date.now()}.jpg`, { type: 'image/jpeg' }); setCaptured(prev => [...prev, { file, url: URL.createObjectURL(blob) }]); }, 'image/jpeg', 0.92);
+  };
+  const removePhoto = (idx: number) => setCaptured(prev => { URL.revokeObjectURL(prev[idx].url); return prev.filter((_, i) => i !== idx); });
+  const handleDone = () => { if (!captured.length) return; stopCamera(); onCaptures(captured.map(c => c.file)); onClose(); };
+  const handleClose = () => { stopCamera(); captured.forEach(c => URL.revokeObjectURL(c.url)); onClose(); };
+  useEffect(() => { startCamera(); return () => stopCamera(); }, []);
+  return (
+    <div className="fixed inset-0 bg-black/95 flex flex-col items-center justify-start p-4 z-[70] overflow-auto">
+      <div className="w-full max-w-3xl flex flex-col items-center gap-3">
+        <div className="text-center"><h3 className="text-xl font-bold text-white">Webcam Capture</h3><p className="text-gray-300 text-sm">{captured.length}/{maxPhotos} captured</p></div>
+        <div className="relative bg-black rounded-xl overflow-hidden border-2 border-emerald-500 w-full">
+          <video ref={videoRef} autoPlay playsInline className="w-full max-h-[50vh] object-contain" />
+          {!isReady && <div className="absolute inset-0 flex items-center justify-center bg-black/80"><div className="animate-spin rounded-full h-10 w-10 border-4 border-emerald-200 border-t-emerald-600"></div></div>}
+        </div>
+        <canvas ref={canvasRef} className="hidden" />
+        {captured.length > 0 && <div className="w-full grid grid-cols-5 gap-1">{captured.map((c, idx) => (<div key={idx} className="relative"><img src={c.url} className="w-full h-14 object-cover rounded border border-emerald-400" /><button onClick={() => removePhoto(idx)} className="absolute top-0 right-0 bg-red-500 text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center">✕</button></div>))}</div>}
+        <div className="flex gap-2 w-full justify-center flex-wrap">
+          <button onClick={capturePhoto} disabled={!isReady || captured.length >= maxPhotos} className={`px-6 py-3 font-semibold rounded-xl ${isReady && captured.length < maxPhotos ? 'bg-emerald-600 text-white' : 'bg-gray-600 text-gray-300 cursor-not-allowed'}`}>📷 Capture</button>
+          <button onClick={handleDone} disabled={!captured.length} className={`px-6 py-3 font-semibold rounded-xl ${captured.length ? 'bg-green-600 text-white' : 'bg-gray-600 text-gray-300 cursor-not-allowed'}`}>✓ Done ({captured.length})</button>
+          <button onClick={handleClose} className="px-6 py-3 font-semibold rounded-xl bg-red-600 text-white">✕ Cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function HRGatepassCard({
   pass,
   onPrint,
@@ -180,15 +247,81 @@ function HRGatepassCard({
   onPrint: (pass: GatePassOut) => void;
 }) {
   const [showHistory, setShowHistory] = useState(false);
-  const [showExitPhoto, setShowExitPhoto] = useState(false);
-  const [showReturnPhoto, setShowReturnPhoto] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
+  const [galleryPhotos, setGalleryPhotos] = useState<{ photo_id: string; type: string }[] | null>(null);
+  const [galleryType, setGalleryType] = useState<string | null>(null);
+  const [photosLoading, setPhotosLoading] = useState<string | null>(null);
+  const [showGallery, setShowGallery] = useState(false);
+
+  const TABS: { key: SubmissionPhotoType; label: string; mandatory: boolean }[] = [
+    { key: "inhouse_challan",     label: "Inhouse Challan",     mandatory: true  },
+    { key: "weighbridge_challan", label: "Weighbridge Challan", mandatory: true  },
+    { key: "vehicle_image",       label: "Vehicle Image",       mandatory: true  },
+    { key: "misc",                label: "Misc",                mandatory: false },
+  ];
+
+  const [activeTab, setActiveTab] = useState<SubmissionPhotoType>("inhouse_challan");
+  const [showUpload, setShowUpload] = useState(false);
+  const [tabFiles, setTabFiles] = useState<Record<SubmissionPhotoType, File[]>>({ inhouse_challan: [], weighbridge_challan: [], vehicle_image: [], misc: [] });
+  const [tabPreviews, setTabPreviews] = useState<Record<SubmissionPhotoType, string[]>>({ inhouse_challan: [], weighbridge_challan: [], vehicle_image: [], misc: [] });
+  const [tabCounts, setTabCounts] = useState<Record<SubmissionPhotoType, number>>({ inhouse_challan: 0, weighbridge_challan: 0, vehicle_image: 0, misc: 0 });
+  const [tabUploading, setTabUploading] = useState(false);
+  const [uploadMessage, setUploadMessage] = useState<{ type: "error" | "success"; text: string } | null>(null);
+  const [showWebcam, setShowWebcam] = useState(false);
+
+  useEffect(() => {
+    if (pass.status === "pending") {
+      getGatePassPhotos(pass.number).then(photos => {
+        const counts: Record<string, number> = { inhouse_challan: 0, weighbridge_challan: 0, vehicle_image: 0, misc: 0 };
+        photos.forEach(p => { if (p.type in counts) counts[p.type]++; });
+        setTabCounts(counts as Record<SubmissionPhotoType, number>);
+      }).catch(() => {});
+    }
+  }, [pass.number, pass.status]);
+
+  async function handleViewPhotos(type: string) {
+    setPhotosLoading(type);
+    try {
+      const all = await getGatePassPhotos(pass.number);
+      const filtered = all.filter(p => p.type === type);
+      setGalleryPhotos(filtered); setGalleryType(type); setShowGallery(true);
+    } catch { setGalleryPhotos([]); setGalleryType(type); setShowGallery(true); }
+    finally { setPhotosLoading(null); }
+  }
+
+  function addFilesToTab(tab: SubmissionPhotoType, files: FileList | File[]) {
+    const arr = Array.from(files);
+    const remaining = 10 - tabFiles[tab].length;
+    const toAdd = arr.slice(0, remaining);
+    if (toAdd.length === 0) { setUploadMessage({ type: "error", text: "Maximum 10 photos per tab." }); return; }
+    setTabFiles(prev => ({ ...prev, [tab]: [...prev[tab], ...toAdd].slice(0, 10) }));
+    setTabPreviews(prev => ({ ...prev, [tab]: [...prev[tab], ...toAdd.map(f => URL.createObjectURL(f))].slice(0, 10) }));
+  }
+
+  function removeFileFromTab(tab: SubmissionPhotoType, idx: number) {
+    URL.revokeObjectURL(tabPreviews[tab][idx]);
+    setTabFiles(prev => ({ ...prev, [tab]: prev[tab].filter((_, i) => i !== idx) }));
+    setTabPreviews(prev => ({ ...prev, [tab]: prev[tab].filter((_, i) => i !== idx) }));
+  }
+
+  async function handleUploadTab(tab: SubmissionPhotoType) {
+    if (tabFiles[tab].length === 0) { setUploadMessage({ type: "error", text: "Select at least one photo." }); return; }
+    setTabUploading(true); setUploadMessage(null);
+    try {
+      await uploadSubmissionPhotos(pass.number, tab, tabFiles[tab]);
+      const count = tabFiles[tab].length;
+      setTabCounts(prev => ({ ...prev, [tab]: prev[tab] + count }));
+      tabPreviews[tab].forEach(u => URL.revokeObjectURL(u));
+      setTabFiles(prev => ({ ...prev, [tab]: [] }));
+      setTabPreviews(prev => ({ ...prev, [tab]: [] }));
+      setUploadMessage({ type: "success", text: `${count} photo${count > 1 ? "s" : ""} uploaded to ${TABS.find(t => t.key === tab)?.label}.` });
+    } catch (e: any) { setUploadMessage({ type: "error", text: e.message || "Upload failed." }); }
+    finally { setTabUploading(false); }
+  }
 
   const formatValue = (value: any) => {
     if (value === null || value === undefined) return "Not Available";
-    if (typeof value === "string" && value.includes("T")) {
-      return new Date(value).toLocaleString();
-    }
+    if (typeof value === "string" && value.includes("T")) return new Date(value).toLocaleString();
     return value;
   };
 
@@ -250,27 +383,60 @@ function HRGatepassCard({
             )}
           </div>
 
-          {/* Photos - Compact Row */}
-          {(pass.exit_photo_id || pass.return_photo_id) && (
-            <div className="flex gap-2">
-              {pass.exit_photo_id && (
-                <button
-                  onClick={() => setShowExitPhoto(true)}
-                  className="flex-1 px-3 py-2 rounded-lg bg-gradient-to-r from-emerald-600 to-green-600 text-white text-xs font-medium hover:shadow-lg hover:scale-105 transition-all duration-200"
-                >
-                  Exit Photo
+          {/* 4-Tab Photos Section */}
+          <div className="space-y-2">
+            <div className="grid grid-cols-4 gap-1">
+              {TABS.map(tab => (
+                <button key={tab.key} onClick={() => { setActiveTab(tab.key); setShowUpload(true); }}
+                  className={`px-2 py-1.5 rounded-lg text-[10px] font-semibold transition-all border ${activeTab === tab.key && showUpload ? "bg-emerald-600 text-white border-emerald-600" : "bg-white text-gray-700 border-gray-200 hover:border-emerald-300"}`}>
+                  {tab.label}{tab.mandatory ? "*" : ""}
+                  {tabCounts[tab.key] > 0 && <span className="ml-1 bg-green-500 text-white text-[9px] px-1 rounded-full">{tabCounts[tab.key]}</span>}
                 </button>
-              )}
-              {pass.return_photo_id && (
-                <button
-                  onClick={() => setShowReturnPhoto(true)}
-                  className="flex-1 px-3 py-2 rounded-lg bg-gradient-to-r from-green-600 to-emerald-600 text-white text-xs font-medium hover:shadow-lg hover:scale-105 transition-all duration-200"
-                >
-                  Return Photo
-                </button>
-              )}
+              ))}
             </div>
-          )}
+
+            {pass.status !== "pending" && (
+              <div className="grid grid-cols-2 gap-1">
+                {TABS.map(tab => (
+                  <button key={tab.key} onClick={() => handleViewPhotos(tab.key)} disabled={photosLoading === tab.key}
+                    className="px-2 py-1.5 rounded-lg bg-gradient-to-r from-emerald-600 to-green-600 text-white text-[10px] font-medium hover:shadow-md transition-all disabled:opacity-50">
+                    {photosLoading === tab.key ? "Loading..." : `View ${tab.label}`}
+                  </button>
+                ))}
+                <button onClick={() => handleViewPhotos("return")} disabled={photosLoading === "return"}
+                  className="px-2 py-1.5 rounded-lg bg-gradient-to-r from-green-600 to-emerald-600 text-white text-[10px] font-medium hover:shadow-md transition-all disabled:opacity-50 col-span-2">
+                  {photosLoading === "return" ? "Loading..." : "Return Photos"}
+                </button>
+              </div>
+            )}
+
+            {pass.status === "pending" && showUpload && (
+              <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 space-y-2 animate-in slide-in-from-top-2 duration-200">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-emerald-800">{TABS.find(t => t.key === activeTab)?.label}{TABS.find(t => t.key === activeTab)?.mandatory && <span className="text-red-500 ml-1">*required</span>}</p>
+                  <button onClick={() => setShowUpload(false)} className="text-gray-400 hover:text-gray-600 text-xs">✕</button>
+                </div>
+                {tabPreviews[activeTab].length > 0 && (
+                  <div className="grid grid-cols-4 gap-1">
+                    {tabPreviews[activeTab].map((url, idx) => (
+                      <div key={idx} className="relative">
+                        <img src={url} alt={`${idx+1}`} className="w-full h-14 object-cover rounded border border-emerald-200" />
+                        <button onClick={() => removeFileFromTab(activeTab, idx)} className="absolute top-0 right-0 bg-red-500 text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center">✕</button>
+                        <span className="absolute bottom-0 left-0 bg-black/50 text-white text-[8px] px-0.5 rounded-br">{idx+1}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {uploadMessage && <p className={`text-xs font-medium ${uploadMessage.type === "success" ? "text-green-700" : "text-red-700"}`}>{uploadMessage.text}</p>}
+                <div className="flex gap-1 flex-wrap">
+                  <button onClick={() => { const i = document.createElement("input"); i.type="file"; i.accept="image/*"; i.multiple=true; i.onchange=(e:any)=>addFilesToTab(activeTab, e.target.files); i.click(); }} disabled={tabFiles[activeTab].length >= 10} className="flex-1 px-2 py-1.5 rounded-lg bg-white border border-emerald-200 text-emerald-800 text-[10px] font-medium hover:bg-emerald-50 disabled:opacity-50">🖼️ Gallery {tabFiles[activeTab].length > 0 ? `(${tabFiles[activeTab].length})` : ""}</button>
+                  <button onClick={() => setShowWebcam(true)} disabled={tabFiles[activeTab].length >= 10} className="flex-1 px-2 py-1.5 rounded-lg bg-white border border-emerald-200 text-emerald-800 text-[10px] font-medium hover:bg-emerald-50 disabled:opacity-50">📷 Webcam</button>
+                  <button onClick={() => handleUploadTab(activeTab)} disabled={tabUploading || tabFiles[activeTab].length === 0} className="flex-1 px-2 py-1.5 rounded-lg bg-gradient-to-r from-emerald-600 to-green-600 text-white text-[10px] font-medium hover:shadow-md disabled:opacity-50">{tabUploading ? "..." : "Upload"}</button>
+                  <button onClick={() => handleViewPhotos(activeTab)} className="flex-1 px-2 py-1.5 rounded-lg bg-white border border-emerald-200 text-emerald-800 text-[10px] font-medium hover:bg-emerald-50">👁️ View ({tabCounts[activeTab]})</button>
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* Collapsible Details */}
           <button
@@ -326,11 +492,36 @@ function HRGatepassCard({
 
       {/* Modals */}
       {showHistory && <StatusHistoryModal history={pass.status_history} onClose={() => setShowHistory(false)} />}
-      {showExitPhoto && pass.exit_photo_id && (
-        <ImagePreviewModal imageId={pass.exit_photo_id} onClose={() => setShowExitPhoto(false)} />
+
+      {showGallery && galleryPhotos !== null && createPortal(
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+            <div className="p-4 border-b-2 border-green-100 bg-gradient-to-r from-emerald-50 to-green-50 flex justify-between items-center">
+              <div>
+                <h3 className="text-lg font-bold text-emerald-800">{galleryType ? (galleryType === "return" ? "Return" : (TABS.find(t => t.key === galleryType)?.label ?? galleryType)) : ""} Photos — {pass.number}</h3>
+                <p className="text-xs text-gray-500 mt-0.5">{galleryPhotos.length} photo{galleryPhotos.length !== 1 ? "s" : ""}</p>
+              </div>
+              <button onClick={() => setShowGallery(false)} className="px-4 py-2 rounded-lg bg-white border-2 border-gray-200 hover:border-red-300 hover:bg-red-50 hover:text-red-600 text-sm font-medium">Close</button>
+            </div>
+            <div className="p-4 overflow-y-auto max-h-[calc(90vh-80px)]">
+              {galleryPhotos.length === 0 ? <p className="text-center text-gray-500 py-8">No photos found</p> : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {galleryPhotos.map((photo, idx) => <GalleryPhotoItem key={photo.photo_id} photo={photo} idx={idx} />)}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
-      {showReturnPhoto && pass.return_photo_id && (
-        <ImagePreviewModal imageId={pass.return_photo_id} onClose={() => setShowReturnPhoto(false)} />
+
+      {showWebcam && createPortal(
+        <WebcamCapture
+          onCaptures={(files) => { addFilesToTab(activeTab, files); setShowWebcam(false); }}
+          onClose={() => setShowWebcam(false)}
+          maxPhotos={10 - tabFiles[activeTab].length}
+        />,
+        document.body
       )}
     </>
   );
@@ -441,29 +632,29 @@ export default function HR() {
     }
   }
 
-  // Mock print function - replace with your actual API call
   async function handlePrint(pass: GatePassOut) {
     const pass_status = getGatepassDetail(pass.number.trim());
-    if ((await pass_status).status == "rejected"){
+    const status = (await pass_status).status;
+    if (status === "rejected") {
       setMessage({ type: "error", text: "Rejected gatepass cannot be printed" });
+      return;
+    }
+    if (status === "pending") {
+      setMessage({ type: "error", text: "Gatepass cannot be printed until approved by admin" });
       return;
     }
     try {
       setMessage({ type: "info", text: "Preparing download..." });
       const blob = await printGatepass(pass.number);
-      // try to infer filename
       const filename = `${pass.number ?? pass.id}.pdf`;
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
+      a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click(); a.remove();
       window.URL.revokeObjectURL(url);
       setMessage({ type: "success", text: `Downloaded ${filename}` });
+      try { await downloadComplete(pass.number); } catch { /* non-critical */ }
     } catch (err: any) {
-      const text = err?.response?.data?.detail || err?.message || "Print failed";
       setMessage({ type: "error", text: "Gatepass cannot be downloaded without admin approval" });
     }
   }
